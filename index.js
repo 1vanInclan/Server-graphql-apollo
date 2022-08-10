@@ -1,4 +1,5 @@
-import { gql, ApolloServer } from "apollo-server"
+import { gql, ApolloServer, UserInputError } from "apollo-server";
+import {v1 as uuid} from 'uuid'; 
 
 
 const persons = [
@@ -27,6 +28,11 @@ const persons = [
 // Definir elementos
 const typeDefinitions = gql`
 
+    enum YesNo {
+        YES
+        NO
+    }
+
     type Address {
         street: String!
         city: String!
@@ -41,18 +47,50 @@ const typeDefinitions = gql`
 
     type Query {
         personCount: Int!
-        allPersons: [Person]!
+        allPersons(phone: YesNo): [Person]!
         findPerson(name: String): Person
+    }
+
+    type Mutation {
+        addPerson(
+            name: String!
+            phone: String
+            street: String!
+            city: String!
+        ): Person
     }
 `
 // Como resolver los datos
 const resolvers = {
     Query: {
         personCount: () => persons.length,
-        allPersons: () => persons,
+        allPersons: (root, args) => {
+            if(!args.phone) return persons
+
+            const byPhone = person =>
+                args.phone == "YES" ? person.phone : !person.phone 
+
+            return persons.filter(byPhone)
+
+
+        },
         findPerson: (root, args) => {
             const {name} = args
             return persons.find(person => person.name === name)
+        }
+    },
+    Mutation: {
+        addPerson: (root, args) => {
+            // Validacion
+            if(persons.find(p => p.name === args.name)){
+                throw new UserInputError('Name must be unique', {
+                    invalidArgs: args.name
+                })
+            }
+            // const {name, phone, street, city} = args
+            const person = {...args, id: uuid()}
+            persons.push(person) //Update database with new person
+            return person
         }
     },
     Person: {
